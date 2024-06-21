@@ -12,7 +12,7 @@ end
 M.run_shell = function(opts)
 	-- Run a bash script, provided as string.
 	return joblib:new(
-		vim.tbl_extend("force", opts, { interactive = false, command = "bash", args = { "-c", opts.command } })
+		vim.tbl_extend("force", opts, { interactive = false, command = vim.o.shell, args = { "-c", opts.command } })
 	)
 end
 
