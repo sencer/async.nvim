@@ -22,10 +22,61 @@ end, { nargs = "+", bang = true })
 vim.api.nvim_create_user_command("Make", function(opts)
 	require("sencer.makegrep").make(opts.args, opts.bang)
 end, { nargs = "*", bang = true })
+
+vim.api.nvim_create_user_command("StopAsync", function(opts)
+	local pid = tonumber(opts.args:match("^(%d+):"))
+	if pid then
+		if require("sencer.async").stop_job(pid) then
+			print("Stopped job " .. pid)
+		else
+			print("Job " .. pid .. " not found")
+		end
+	else
+		pid = tonumber(opts.args)
+		if pid then
+			if require("sencer.async").stop_job(pid) then
+				print("Stopped job " .. pid)
+			else
+				print("Job " .. pid .. " not found")
+			end
+		else
+			print("Usage: :StopAsync <pid> (or select from completion)")
+		end
+	end
+end, {
+	nargs = 1,
+	complete = function(ArgLead, CmdLine, CursorPos)
+		local jobs = require("sencer.async").get_running_jobs()
+		local candidates = {}
+		for pid, job in pairs(jobs) do
+			local desc = tostring(pid) .. ": " .. job.desc
+			table.insert(candidates, desc)
+		end
+		return vim.tbl_filter(function(c)
+			return c:match("^" .. ArgLead)
+		end, candidates)
+	end,
+})
 -- Maps
 vim.keymap.set("n", "gr<Space>", ":Grep ", { remap = false })
 vim.keymap.set("n", "grr<Space>", ":Grep! ", { remap = false })
-vim.keymap.set("n", "gr", 'async#OpFuncWrapper({x -> execute("Grep ".x)})', { expr = true })
-vim.keymap.set("x", "gr", 'async#OpFuncWrapper({x -> execute("Grep ".x)})', { expr = true })
-vim.keymap.set("n", "grr", 'async#OpFuncWrapper({x -> execute("Grep! ".x)})', { expr = true })
-vim.keymap.set("x", "grr", 'async#OpFuncWrapper({x -> execute("Grep! ".x)})', { expr = true })
+vim.keymap.set("n", "gr", function()
+	return require("sencer.async").set_op(function(text)
+		vim.cmd("Grep " .. text)
+	end)
+end, { expr = true, desc = "Grep operator" })
+vim.keymap.set("x", "gr", function()
+	return require("sencer.async").set_op(function(text)
+		vim.cmd("Grep " .. text)
+	end)
+end, { expr = true, desc = "Grep operator" })
+vim.keymap.set("n", "grr", function()
+	return require("sencer.async").set_op(function(text)
+		vim.cmd("Grep! " .. text)
+	end)
+end, { expr = true, desc = "Grep! operator" })
+vim.keymap.set("x", "grr", function()
+	return require("sencer.async").set_op(function(text)
+		vim.cmd("Grep! " .. text)
+	end)
+end, { expr = true, desc = "Grep! operator" })
