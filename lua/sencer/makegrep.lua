@@ -16,7 +16,7 @@ local function get_prg(typ, bufnr)
 	return grepprg
 end
 
-local function run(typ, text)
+local function run(typ, text, bang)
 	local bufnr = vim.fn.bufnr()
 
 	local prg = get_prg(typ, bufnr)
@@ -26,7 +26,7 @@ local function run(typ, text)
 	end
 
 	text = vim.trim(text)
-	local command = #text > 0 and (prg .. " " .. vim.trim(text)) or prg
+	local command = #text > 0 and (prg .. " " .. text) or prg
 
 	local efm = typ == "grepprg" and vim.o.grepformat
 		or (#vim.bo.errorformat > 0 and vim.bo.errorformat or vim.o.errorformat)
@@ -35,8 +35,8 @@ local function run(typ, text)
 		nr = "$",
 		title = command,
 		efm = efm,
-
 		command = command,
+		run_shell = bang,
 	}
 
 	local job = async.qf(opts)
@@ -48,8 +48,8 @@ M.search = function(text)
 	return run("grepprg", text)
 end
 
-M.make = function(text)
-	return run("makeprg", text)
+M.make = function(text, bang)
+	return run("makeprg", text, bang)
 end
 
 return M

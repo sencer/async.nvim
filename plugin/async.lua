@@ -20,8 +20,8 @@ vim.api.nvim_create_user_command("Grep", function(opts)
 end, { nargs = "+", bang = true })
 
 vim.api.nvim_create_user_command("Make", function(opts)
-	require("sencer.makegrep").make(opts.args)
-end, { nargs = "*" })
+	require("sencer.makegrep").make(opts.args, opts.bang)
+end, { nargs = "*", bang = true })
 -- Maps
 vim.keymap.set("n", "gr<Space>", ":Grep ", { remap = false })
 vim.keymap.set("n", "grr<Space>", ":Grep! ", { remap = false })
