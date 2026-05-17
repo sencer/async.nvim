@@ -47,7 +47,9 @@ M.qf = function(opts)
 	local lines_to_add = {}
 
 	local function process_line(line)
-		table.insert(lines_to_add, line)
+		if line ~= "" then
+			table.insert(lines_to_add, line)
+		end
 	end
 
 	local output_watcher = function(err, data)
@@ -79,7 +81,7 @@ M.qf = function(opts)
 	local job = M.run_shell({
 		command = opts.command,
 		on_stdout = output_watcher,
-		on_stderr = output_watcher,
+		on_stderr = function() end,
 		on_exit = function(obj)
 			timer:stop()
 			if buffer ~= "" then
@@ -92,6 +94,9 @@ M.qf = function(opts)
 			end
 			vim.schedule(function()
 				vim.cmd("doautocmd QuickFixCmdPost cfile")
+				if opts.on_finish then
+					opts.on_finish()
+				end
 			end)
 		end,
 	})
