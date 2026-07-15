@@ -15,13 +15,17 @@ M.run_shell = function(opts)
 		stderr = opts.on_stderr,
 	}, function(obj)
 		-- on_exit callback
-		running_jobs[handle.pid] = nil
+		if handle and handle.pid then
+			running_jobs[handle.pid] = nil
+		end
 		if opts.on_exit then
 			opts.on_exit(obj)
 		end
 	end)
 
-	running_jobs[handle.pid] = { handle = handle, desc = opts.command }
+	if handle and handle.pid then
+		running_jobs[handle.pid] = { handle = handle, desc = opts.command }
+	end
 	return handle
 end
 
