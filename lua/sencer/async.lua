@@ -71,7 +71,7 @@ M.qf = function(opts)
 		end
 	end
 
-	local timer = vim.loop.new_timer()
+	local timer = vim.uv.new_timer()
 	timer:start(0, 50, function()
 		if #lines_to_add > 0 then
 			local lines = lines_to_add
@@ -124,7 +124,8 @@ M.op_func = function(type)
 	if #target_line == 0 then
 		end_col = 0
 	else
-		local char_idx = vim.str_utfindex(target_line, end_col)
+		local valid_end_col = math.min(end_col, #target_line)
+		local char_idx = vim.str_utfindex(target_line, valid_end_col)
 		end_col = vim.str_byteindex(target_line, math.min(#target_line, char_idx + 1))
 	end
 
