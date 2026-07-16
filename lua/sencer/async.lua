@@ -120,9 +120,15 @@ M.op_func = function(type)
 	local start_row, start_col = start_mark[1] - 1, start_mark[2]
 	local end_row, end_col = end_mark[1] - 1, end_mark[2]
 
-	-- Handle edge cases or multiline if needed, but for now simple case.
-	-- nvim_buf_get_text end_col is exclusive, so add 1 to include the character at mark ']'.
-	local lines = vim.api.nvim_buf_get_text(0, start_row, start_col, end_row, end_col + 1, {})
+	local target_line = (vim.api.nvim_buf_get_lines(0, end_row, end_row + 1, false)[1]) or ""
+	if #target_line == 0 then
+		end_col = 0
+	else
+		local char_idx = vim.str_utfindex(target_line, end_col)
+		end_col = vim.str_byteindex(target_line, math.min(#target_line, char_idx + 1))
+	end
+
+	local lines = vim.api.nvim_buf_get_text(0, start_row, start_col, end_row, end_col, {})
 	local text = table.concat(lines, "\n")
 
 	if current_callback then

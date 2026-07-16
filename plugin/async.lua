@@ -53,7 +53,7 @@ end, {
 			table.insert(candidates, desc)
 		end
 		return vim.tbl_filter(function(c)
-			return c:match("^" .. ArgLead)
+			return vim.startswith(c, ArgLead)
 		end, candidates)
 	end,
 })
