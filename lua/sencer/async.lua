@@ -87,7 +87,10 @@ M.qf = function(opts)
 		on_stdout = output_watcher,
 		on_stderr = function() end,
 		on_exit = function(obj)
-			timer:stop()
+			if not timer:is_closing() then
+				timer:stop()
+				timer:close()
+			end
 			if buffer ~= "" then
 				process_line(buffer)
 			end
