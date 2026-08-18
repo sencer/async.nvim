@@ -125,8 +125,12 @@ M.op_func = function(type)
 		end_col = 0
 	else
 		local valid_end_col = math.min(end_col, #target_line)
-		local char_idx = vim.str_utfindex(target_line, valid_end_col)
-		end_col = vim.str_byteindex(target_line, math.min(#target_line, char_idx + 1))
+		if valid_end_col >= #target_line then
+			end_col = #target_line
+		else
+			local char_idx = vim.str_utfindex(target_line, valid_end_col)
+			end_col = vim.str_byteindex(target_line, char_idx + 1)
+		end
 	end
 
 	local lines = vim.api.nvim_buf_get_text(0, start_row, start_col, end_row, end_col, {})
