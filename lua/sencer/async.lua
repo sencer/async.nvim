@@ -43,16 +43,126 @@ M.stop_job = function(pid)
 	return false
 end
 
+M.exec = function(command, opts)
+	opts = opts or {}
+	return vim.async.await(3, function(cmd, opt, cb)
+		local handle
+		handle = vim.system(
+			{ vim.o.shell, "-c", cmd },
+			opt,
+			vim.schedule_wrap(function(obj)
+				if handle and handle.pid then
+					running_jobs[handle.pid] = nil
+				end
+				cb(obj)
+			end)
+		)
+		if handle and handle.pid then
+			running_jobs[handle.pid] = { handle = handle, desc = cmd }
+		end
+		return {
+			close = function(self, done)
+				if handle and not handle:is_closing() then
+					handle:kill(15)
+				end
+				if done then
+					done()
+				end
+			end,
+		}
+	end, command, opts)
+end
+
 M.qf = function(opts)
 	vim.cmd.cclose()
 	vim.fn.setqflist({}, " ", opts)
 
 	local buffer = ""
-	local lines_to_add = {}
+	local pending_lines = {}
+	local total_added = 0
+	local max_results = opts.max_rows or opts.max_results or vim.g.async_qf_max_rows or vim.g.async_qf_max_results or 2000
+	local batch_size = opts.batch_size or 500
+	local job_handle = nil
+	local timer = vim.uv.new_timer()
+	local process_exited = false
+	local exit_obj = nil
+	local stopped = false
+	local notified = false
 
-	local function process_line(line)
-		if line ~= "" then
-			table.insert(lines_to_add, line)
+	local function stop_and_notify()
+		if not stopped then
+			stopped = true
+			if job_handle and not job_handle:is_closing() then
+				job_handle:kill(15)
+			end
+			if not notified then
+				notified = true
+				vim.schedule(function()
+					vim.notify(string.format("Search reached %d rows limit; stopped.", max_results), vim.log.levels.WARN)
+				end)
+			end
+		end
+	end
+
+	local function finish_job()
+		if timer and not timer:is_closing() then
+			timer:stop()
+			timer:close()
+		end
+		vim.schedule(function()
+			vim.cmd("doautocmd QuickFixCmdPost cfile")
+			if opts.on_finish then
+				opts.on_finish(exit_obj)
+			end
+		end)
+	end
+
+	local function flush()
+		if #pending_lines == 0 then
+			if process_exited then
+				finish_job()
+			end
+			return
+		end
+
+		local cur_limit = batch_size
+		if max_results > 0 then
+			cur_limit = math.min(batch_size, max_results - total_added)
+			if cur_limit <= 0 then
+				pending_lines = {}
+				finish_job()
+				return
+			end
+		end
+
+		local lines
+		if #pending_lines > cur_limit then
+			lines = {}
+			for i = 1, cur_limit do
+				lines[i] = pending_lines[i]
+			end
+			local remaining = {}
+			for i = cur_limit + 1, #pending_lines do
+				table.insert(remaining, pending_lines[i])
+			end
+			pending_lines = remaining
+		else
+			lines = pending_lines
+			pending_lines = {}
+		end
+
+		total_added = total_added + #lines
+		vim.fn.setqflist({}, "a", { efm = opts.efm, lines = lines })
+
+		if max_results > 0 and total_added >= max_results then
+			stop_and_notify()
+			pending_lines = {}
+			finish_job()
+			return
+		end
+
+		if process_exited and #pending_lines == 0 then
+			finish_job()
 		end
 	end
 
@@ -61,25 +171,24 @@ M.qf = function(opts)
 			print("Error: " .. err)
 			return
 		end
-		if data then
+		if not stopped and data and data ~= "" then
 			buffer = buffer .. data
 			local lines = vim.split(buffer, "\n", { plain = true })
-			buffer = lines[#lines]
-			for i = 1, #lines - 1 do
-				process_line(lines[i])
+			buffer = table.remove(lines) or ""
+			for _, line in ipairs(lines) do
+				if line ~= "" then
+					table.insert(pending_lines, line)
+					if max_results > 0 and (total_added + #pending_lines) >= max_results then
+						stop_and_notify()
+						break
+					end
+				end
 			end
 		end
 	end
 
-	local timer = vim.uv.new_timer()
 	timer:start(0, 50, function()
-		if #lines_to_add > 0 then
-			local lines = lines_to_add
-			lines_to_add = {}
-			vim.schedule(function()
-				vim.fn.setqflist({}, "a", { efm = opts.efm, lines = lines })
-			end)
-		end
+		vim.schedule(flush)
 	end)
 
 	local job = M.run_shell({
@@ -87,27 +196,17 @@ M.qf = function(opts)
 		on_stdout = output_watcher,
 		on_stderr = function() end,
 		on_exit = function(obj)
-			if not timer:is_closing() then
-				timer:stop()
-				timer:close()
+			process_exited = true
+			exit_obj = obj
+			if not stopped and buffer ~= "" then
+				table.insert(pending_lines, buffer)
+				buffer = ""
 			end
-			if buffer ~= "" then
-				process_line(buffer)
-			end
-			if #lines_to_add > 0 then
-				vim.schedule(function()
-					vim.fn.setqflist({}, "a", { efm = opts.efm, lines = lines_to_add })
-				end)
-			end
-			vim.schedule(function()
-				vim.cmd("doautocmd QuickFixCmdPost cfile")
-				if opts.on_finish then
-					opts.on_finish()
-				end
-			end)
+			vim.schedule(flush)
 		end,
 	})
 
+	job_handle = job
 	return job
 end
 
